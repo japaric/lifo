@@ -17,7 +17,7 @@
 //! #![no_main]
 //! #![no_std]
 //!
-//! use lifo::{pool, singleton::Box, Node};
+//! use lifo::{pool, singleton::Box};
 //!
 //! // instantiate a memory pool of `[u8; 128]` blocks as a global singleton
 //! pool!(A: [u8; 128]);
@@ -32,7 +32,7 @@
 //!     // claim a block of memory
 //!     // note that the type is `Box<A>`, and not `Box<[u8; 128]>`
 //!     // `A` is the "name" of the pool
-//!     let x: Box<A> = A::alloc().unwrap();
+//!     let x: Box<A, _> = A::alloc().unwrap();
 //!     loop {
 //!         // .. do stuff with `x` ..
 //!     }
