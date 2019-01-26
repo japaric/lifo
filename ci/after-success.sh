@@ -1,7 +1,7 @@
 set -euxo pipefail
 
 main() {
-    cargo doc --features 'maybe-uninit union'
+    cargo doc --target $TARGET --features 'maybe-uninit union'
 
     mkdir ghp-import
     curl -Ls https://github.com/davisp/ghp-import/archive/master.tar.gz |
