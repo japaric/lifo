@@ -137,7 +137,12 @@
 //!
 //! ## `maybe-uninit`
 //!
+//! Enabling this features adds a `grow_exact` method to `Pool` and `singleton::Pool`. Like `grow`,
+//! this method can be used increase the capacity of a pool; however, the given buffer will be fully
+//! utilized.
 //!
+//! The argument of `grow_exact` is a static reference to `MaybeUninit`. As the `MaybeUninit` is
+//! still unstable this feature requires using a nightly compiler.
 //!
 //! ## `union`
 //!
