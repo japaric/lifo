@@ -3,9 +3,9 @@ set -euxo pipefail
 main() {
     cargo check --target $TARGET
     if [ $TRAVIS_RUST_VERSION = nightly ]; then
+        cargo check --target $TARGET --features 'maybe-uninit'
         cargo check --target $TARGET --features 'union'
-        cargo check --target $TARGET --features 'asm'
-        cargo check --target $TARGET --features 'asm union'
+        cargo check --target $TARGET --features 'maybe-uninit union'
     fi
 
     if [ $TARGET = x86_64-unknown-linux-gnu ]; then
@@ -21,6 +21,13 @@ main() {
 
             cargo test --target $TARGET
             cargo test --target $TARGET --release
+        fi
+    else
+        if [ $TRAVIS_RUST_VERSION = nightly ]; then
+            cargo check --target $TARGET --features 'asm'
+            cargo check --target $TARGET --features 'asm union'
+            cargo check --target $TARGET --features 'asm maybe-uninit'
+            cargo check --target $TARGET --features 'asm maybe-uninit union'
         fi
     fi
 }

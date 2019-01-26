@@ -1,6 +1,5 @@
 use core::{
     mem,
-    pin::Pin,
     sync::atomic::{AtomicUsize, Ordering},
 };
 
@@ -29,18 +28,6 @@ fn sanity() {
 
     // should be possible to allocate again
     assert_eq!(*POOL.alloc().unwrap().init(1), 1);
-}
-
-// we should be able to pin `Box`-es
-#[test]
-fn pin() {
-    static POOL: Pool<u8> = Pool::new();
-    static mut MEMORY: [u8; 31] = [0; 31];
-
-    POOL.grow(unsafe { &mut MEMORY });
-
-    let x = Pin::new(POOL.alloc().unwrap().init(0));
-    assert_eq!(*x, 0);
 }
 
 #[test]
