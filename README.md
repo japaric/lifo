@@ -2,6 +2,8 @@
 
 > A heap-less, interrupt-safe, lock-free memory pool for Cortex-M devices
 
+## [Documentation](https://japaric.github.io/lifo/lifo/index.html)
+
 ## License
 
 The code in this repository is distributed under the terms of both the MIT
