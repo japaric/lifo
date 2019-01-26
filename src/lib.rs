@@ -6,6 +6,10 @@
 //! **NOTE** This is more likely to be merged into `heapless` (once I iterate on it more) than to
 //! be published as its own crate.
 //!
+//! (You may also be interested in my [old experiments] with allocators and (owned) singletons).
+//!
+//! [old experiments]: https://docs.rs/alloc-singleton/0.1.0/alloc_singleton/
+//!
 //! # Examples
 //!
 //! The most common way of using this pool is as a global singleton; the singleton mode gives you
