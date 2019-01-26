@@ -185,7 +185,6 @@ where
 mod tests {
     use core::{
         mem,
-        pin::Pin,
         sync::atomic::{AtomicUsize, Ordering},
     };
 
@@ -215,19 +214,6 @@ mod tests {
 
         // should be possible to allocate again
         assert_eq!(*A::alloc().unwrap().init(1), 1);
-    }
-
-    // we should be able to pin `Box`-es
-    #[test]
-    fn pin() {
-        pool!(A: u8);
-
-        static mut MEMORY: [u8; 31] = [0; 31];
-
-        A::grow(unsafe { &mut MEMORY });
-
-        let x = Pin::new(A::alloc().unwrap().init(0));
-        assert_eq!(*x, 0);
     }
 
     #[test]
