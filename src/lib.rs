@@ -74,15 +74,15 @@
 //!
 //! # Performance
 //!
-//! Measured on a ARM Cortex-M3 core running at 8 MHz and with zero Flash latency
+//! Measured on a ARM Cortex-M3 core running at 8 MHz and with zero Flash wait cycles
 //!
 //! N | `alloc` (`3`) | `alloc` (`z`) | `alloc` (`asm`) | `free` (`3`) | `free` (`z`) | `free` (`asm`)
 //! --|---------------|---------------|-----------------|--------------|--------------|---------------
 //! 0 | 19            | 22            | 11              | 18           | 16           | 9
-//! 1 | 44            | 48            | 20              | 40           | 36           | 16
-//! 2 | 68            | 72            | 29              | 43           | 45           | 23
-//! 3 | 88            | 96            | 38              | 57           | 56           | 30
-//! 4 | 113           | 120           | 47              | 68           | 67           | 37
+//! 1 | 44            | 48            | 18              | 40           | 36           | 18
+//! 2 | 68            | 72            | 26              | 43           | 45           | 20
+//! 3 | 88            | 96            | 33              | 57           | 56           | 27
+//! 4 | 113           | 120           | 45              | 68           | 67           | 37
 //!
 //! - `N` denotes the number of *interruptions*. On Cortex-M, an interruption consists of an
 //!   interrupt handler preempting the would-be atomic section of the `alloc` / `free` operation.
@@ -131,12 +131,12 @@
 //!
 //! # Cargo features
 //!
-//! ## `asm`
+//! ## `arch`
 //!
-//! Replaces the internal implementation, which uses `AtomicPtr`, with an architecture specific
-//! assembly implementation that use LL/SC primitives. This optimized implementation significantly
-//! reduces the overhead of `alloc` and `free`, and also shrinks the "critical section" of `free`
-//! (`push`) from 4 to 3 instructions. For reference, the critical section of `alloc` (`pop`) is 4
+//! Replaces the internal implementation, which uses `AtomicPtr`, with an ARM architecture specific
+//! implementation that use LL/SC primitives. This optimized implementation significantly reduces
+//! the overhead of `alloc` and `free`, and also shrinks the "critical section" of `free` (`push`)
+//! from 3 to 2 instructions. For reference, the critical section of `alloc` (`pop`) is 3
 //! instructions for both implementations.
 //!
 //! ## `maybe-uninit`
@@ -252,7 +252,7 @@
 // TODO update uses of `Ordering` (check generated DMB instructions) to make this multi-core safe
 // TODO check if this also works on ARMv7-R
 
-#![cfg_attr(feature = "asm", feature(asm))]
+#![cfg_attr(feature = "arch", feature(link_llvm_intrinsics))]
 #![cfg_attr(feature = "maybe-uninit", feature(maybe_uninit))]
 #![cfg_attr(feature = "union", allow(unions_with_drop_fields))]
 #![cfg_attr(feature = "union", feature(untagged_unions))]
@@ -262,7 +262,7 @@
 
 #[cfg(feature = "maybe-uninit")]
 use core::mem::MaybeUninit;
-#[cfg(not(feature = "asm"))]
+#[cfg(not(feature = "arch"))]
 use core::sync::atomic::{AtomicPtr, Ordering};
 use core::{
     any::TypeId,
@@ -277,8 +277,8 @@ use as_slice::{AsMutSlice, AsSlice};
 
 pub use crate::singleton::Pool as pool;
 
-#[cfg(feature = "asm")]
-mod asm;
+#[cfg(feature = "arch")]
+mod arch;
 pub mod singleton;
 #[cfg(test)]
 mod tests;
@@ -286,15 +286,15 @@ mod tests;
 /// A lock-free memory pool
 pub struct Pool<T> {
     // Our "free list" is actually a Treiber stack
-    #[cfg(not(feature = "asm"))]
+    #[cfg(not(feature = "arch"))]
     head: AtomicPtr<Node<T>>,
 
-    #[cfg(feature = "asm")]
+    #[cfg(feature = "arch")]
     head: UnsafeCell<*mut Node<T>>,
 
     // Current implementation is unsound on architectures that don't have LL/SC semantics so this
     // struct is not `Sync` on those platforms
-    #[cfg(not(feature = "asm"))]
+    #[cfg(not(feature = "arch"))]
     _not_send_or_sync: PhantomData<*const ()>,
 }
 
@@ -310,13 +310,13 @@ impl<T> Pool<T> {
     /// Creates a new empty pool
     pub const fn new() -> Self {
         Pool {
-            #[cfg(not(feature = "asm"))]
+            #[cfg(not(feature = "arch"))]
             head: AtomicPtr::new(ptr::null_mut()),
 
-            #[cfg(feature = "asm")]
+            #[cfg(feature = "arch")]
             head: UnsafeCell::new(ptr::null_mut()),
 
-            #[cfg(not(feature = "asm"))]
+            #[cfg(not(feature = "arch"))]
             _not_send_or_sync: PhantomData,
         }
     }
@@ -400,8 +400,7 @@ impl<T> Pool<T> {
         }
     }
 
-    #[cfg(not(feature = "asm"))]
-    #[inline(never)]
+    #[cfg(not(feature = "arch"))]
     fn pop(&self) -> Option<NonNull<Node<T>>> {
         // NOTE: currently we only support single core devices (i.e. Non-Shareable memory)
         let fetch_order = Ordering::Relaxed;
@@ -427,18 +426,19 @@ impl<T> Pool<T> {
         }
     }
 
-    #[cfg(feature = "asm")]
+    #[cfg(feature = "arch")]
     fn pop(&self) -> Option<NonNull<Node<T>>> {
-        use crate::asm;
+        use crate::arch;
 
         unsafe {
             loop {
-                let head = asm::ldrex(self.head.get()); // State: Exclusive
+                // State: Exclusive
+                let head = arch::ldrex(self.head.get() as *const u32) as *mut Node<T>;
 
                 if let Some(nn_head) = NonNull::new(head) {
                     let next = (*head).next;
 
-                    if asm::strex(self.head.get(), next) {
+                    if arch::strex(next as u32, self.head.get() as *mut u32) == 0 {
                         // State: Open
                         break Some(nn_head);
                     } else {
@@ -447,14 +447,14 @@ impl<T> Pool<T> {
                     }
                 } else {
                     // stack is observed as empty
-                    asm::clrex(); // State: Open
+                    arch::clrex(); // State: Open
                     break None;
                 }
             }
         }
     }
 
-    #[cfg(not(feature = "asm"))]
+    #[cfg(not(feature = "arch"))]
     fn push(&self, mut new_head: NonNull<Node<T>>) {
         // NOTE: currently we only support single core devices (i.e. Non-Shareable memory)
         let fetch_order = Ordering::Relaxed;
@@ -475,15 +475,16 @@ impl<T> Pool<T> {
         }
     }
 
-    #[cfg(feature = "asm")]
+    #[cfg(feature = "arch")]
     fn push(&self, mut new_head: NonNull<Node<T>>) {
         unsafe {
             loop {
-                let head = asm::ldrex(self.head.get()); // State: Exclusive
+                // State: Exclusive
+                let head = arch::ldrex(self.head.get() as *const u32) as *mut Node<T>;
 
                 new_head.as_mut().next = head;
 
-                if asm::strex(self.head.get(), new_head.as_ptr()) {
+                if arch::strex(new_head.as_ptr() as u32, self.head.get() as *mut u32) == 0 {
                     // State: Open
                     break;
                 } else {
