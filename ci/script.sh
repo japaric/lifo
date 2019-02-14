@@ -24,10 +24,10 @@ main() {
         fi
     else
         if [ $TRAVIS_RUST_VERSION = nightly ]; then
-            cargo check --target $TARGET --features 'asm'
-            cargo check --target $TARGET --features 'asm union'
-            cargo check --target $TARGET --features 'asm maybe-uninit'
-            cargo check --target $TARGET --features 'asm maybe-uninit union'
+            cargo check --target $TARGET --features 'arch'
+            cargo check --target $TARGET --features 'arch union'
+            cargo check --target $TARGET --features 'arch maybe-uninit'
+            cargo check --target $TARGET --features 'arch maybe-uninit union'
         fi
     fi
 }
