@@ -1,0 +1,227 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API documentation for the Rust `lifo` crate."><meta name="keywords" content="rust, rustlang, rust-lang, lifo"><title>lifo - Rust</title><link rel="stylesheet" type="text/css" href="../normalize.css"><link rel="stylesheet" type="text/css" href="../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../dark.css"><link rel="stylesheet" type="text/css" href="../light.css" id="themeStyle"><script src="../storage.js"></script><noscript><link rel="stylesheet" href="../noscript.css"></noscript><link rel="shortcut icon" href="../favicon.ico"><style type="text/css">#crate-search{background-image:url("../down-arrow.svg");}</style></head><body class="rustdoc mod"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><a href='../lifo/index.html'><img src='../rust-logo.png' alt='logo' width='100'></a><p class='location'>Crate lifo</p><div class="sidebar-elems"><a id='all-types' href='all.html'><p>See all lifo's items</p></a><div class="block items"><ul><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#unions">Unions</a></li></ul></div><p class='location'></p><script>window.sidebarCurrent = {name: 'lifo', ty: 'mod', relpath: '../'};</script></div></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!"><img src="../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices"></div></div><script src="../theme.js"></script><nav class="sub"><form class="search-form js-only"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><a id="settings-menu" href="../settings.html"><img src="../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><h1 class='fqn'><span class='out-of-band'><span id='render-detail'><a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">[<span class='inner'>&#x2212;</span>]</a></span><a class='srclink' href='../src/lifo/lib.rs.html#1-587' title='goto source code'>[src]</a></span><span class='in-band'>Crate <a class="mod" href=''>lifo</a></span></h1><div class='docblock'><p>A heap-less, interrupt-safe, lock-free memory pool for Cortex-M devices</p>
+<p><strong>WARNING</strong> Do not use this on multi-core devices. The implementation has not been revised for
+multi-core soundness.</p>
+<p><strong>NOTE</strong> This is more likely to be merged into <code>heapless</code> (once I iterate on it more) than to
+be published as its own crate.</p>
+<p>(You may also be interested in my <a href="https://docs.rs/alloc-singleton/0.1.0/alloc_singleton/">old experiments</a> with allocators and (owned) singletons).</p>
+<h1 id="examples" class="section-header"><a href="#examples">Examples</a></h1>
+<p>The most common way of using this pool is as a global singleton; the singleton mode gives you
+automatic deallocation of memory blocks on <code>drop</code>.</p>
+<ul>
+<li><code>no_std</code></li>
+</ul>
+
+<div class='information'><div class='tooltip ignore'>ⓘ<span class='tooltiptext'>This example is not tested</span></div></div><div class="example-wrap"><pre class="rust rust-example-rendered ignore">
+<span class="attribute">#![<span class="ident">no_main</span>]</span>
+<span class="attribute">#![<span class="ident">no_std</span>]</span>
+
+<span class="kw">use</span> <span class="ident">lifo</span>::{<span class="ident">pool</span>, <span class="ident">singleton</span>::<span class="ident">Box</span>};
+
+<span class="comment">// instantiate a memory pool of `[u8; 128]` blocks as a global singleton</span>
+<span class="macro">pool</span><span class="macro">!</span>(<span class="ident">A</span>: [<span class="ident">u8</span>; <span class="number">128</span>]);
+
+<span class="attribute">#[<span class="ident">entry</span>]</span>
+<span class="kw">fn</span> <span class="ident">main</span>() <span class="op">-&gt;</span> <span class="op">!</span> {
+    <span class="kw">static</span> <span class="kw-2">mut</span> <span class="ident">MEMORY</span>: [<span class="ident">u8</span>; <span class="number">1024</span>] <span class="op">=</span> [<span class="number">0</span>; <span class="number">1024</span>];
+
+    <span class="comment">// increase the capacity of the pool by ~8 blocks</span>
+    <span class="ident">A</span>::<span class="ident">grow</span>(<span class="ident">MEMORY</span>);
+
+    <span class="comment">// claim a block of memory</span>
+    <span class="comment">// note that the type is `Box&lt;A&gt;`, and not `Box&lt;[u8; 128]&gt;`</span>
+    <span class="comment">// `A` is the &quot;name&quot; of the pool</span>
+    <span class="kw">let</span> <span class="ident">x</span>: <span class="ident">Box</span><span class="op">&lt;</span><span class="ident">A</span>, <span class="kw">_</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">A</span>::<span class="ident">alloc</span>().<span class="ident">unwrap</span>();
+    <span class="kw">loop</span> {
+        <span class="comment">// .. do stuff with `x` ..</span>
+    }
+}
+
+<span class="attribute">#[<span class="ident">exception</span>]</span>
+<span class="kw">fn</span> <span class="ident">SysTick</span>() {
+    <span class="comment">// claim a block of memory</span>
+    <span class="kw">let</span> <span class="ident">y</span> <span class="op">=</span> <span class="ident">A</span>::<span class="ident">alloc</span>().<span class="ident">unwrap</span>();
+
+    <span class="comment">// .. do stuff with `y` ..</span>
+
+    <span class="comment">// return the memory block to the pool</span>
+    <span class="ident">drop</span>(<span class="ident">y</span>);
+}</pre></div>
+<ul>
+<li><code>std</code> -- note that, when using <code>std</code>, <code>Pool</code> does <em>not</em> implement <code>Sync</code> and <code>pool!</code> is not
+available</li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered">
+<span class="kw">use</span> <span class="ident">lifo</span>::<span class="ident">Pool</span>;
+
+<span class="kw">let</span> <span class="ident">pool</span> <span class="op">=</span> <span class="ident">Pool</span>::<span class="op">&lt;</span>[<span class="ident">u8</span>; <span class="number">128</span>]<span class="op">&gt;</span>::<span class="ident">new</span>();
+
+<span class="ident">pool</span>.<span class="ident">grow</span>(<span class="ident">Box</span>::<span class="ident">leak</span>(<span class="ident">Box</span>::<span class="ident">new</span>([<span class="number">0</span>; <span class="number">1024</span>])));
+
+<span class="kw">let</span> <span class="ident">x</span> <span class="op">=</span> <span class="ident">pool</span>.<span class="ident">alloc</span>().<span class="ident">unwrap</span>();
+
+<span class="comment">// .. do stuff with `x` ..</span>
+
+<span class="comment">// return the memory to the pool</span>
+<span class="ident">pool</span>.<span class="ident">free</span>(<span class="ident">x</span>);</pre></div>
+<h1 id="performance" class="section-header"><a href="#performance">Performance</a></h1>
+<p>Measured on a ARM Cortex-M3 core running at 8 MHz and with zero Flash wait cycles</p>
+<table><thead><tr><th>N </th><th> <code>alloc</code> (<code>3</code>) </th><th> <code>alloc</code> (<code>z</code>) </th><th> <code>alloc</code> (<code>asm</code>) </th><th> <code>free</code> (<code>3</code>) </th><th> <code>free</code> (<code>z</code>) </th><th> <code>free</code> (<code>asm</code>)</th></tr></thead><tbody>
+<tr><td>0 </td><td> 19            </td><td> 22            </td><td> 11              </td><td> 18           </td><td> 16           </td><td> 9</td></tr>
+<tr><td>1 </td><td> 44            </td><td> 48            </td><td> 18              </td><td> 40           </td><td> 36           </td><td> 18</td></tr>
+<tr><td>2 </td><td> 68            </td><td> 72            </td><td> 26              </td><td> 43           </td><td> 45           </td><td> 20</td></tr>
+<tr><td>3 </td><td> 88            </td><td> 96            </td><td> 33              </td><td> 57           </td><td> 56           </td><td> 27</td></tr>
+<tr><td>4 </td><td> 113           </td><td> 120           </td><td> 45              </td><td> 68           </td><td> 67           </td><td> 37</td></tr>
+</tbody></table>
+<ul>
+<li><code>N</code> denotes the number of <em>interruptions</em>. On Cortex-M, an interruption consists of an
+interrupt handler preempting the would-be atomic section of the <code>alloc</code> / <code>free</code> operation.
+Note that it does <em>not</em> matter if the higher priority handler uses the same pool or not.</li>
+<li>All execution times are in clock cycles.</li>
+<li>Execution time is independent of <code>mem::size_of::&lt;T&gt;()</code>.</li>
+<li>The optimization level is indicated in parentheses. <code>asm</code> indicates that the &quot;asm&quot; feature is
+enabled.</li>
+<li>The numbers reported for <code>free</code> assume that <code>T</code> does <em>not</em> have a destructor.</li>
+<li>The numbers reported for <code>alloc</code> correspond to the successful path (i.e. <code>Some</code> variant is
+returned).</li>
+<li>Snippets used to benchmark the code:</li>
+</ul>
+
+<div class='information'><div class='tooltip ignore'>ⓘ<span class='tooltiptext'>This example is not tested</span></div></div><div class="example-wrap"><pre class="rust rust-example-rendered ignore">
+<span class="attribute">#[<span class="ident">inline</span>(<span class="ident">never</span>)]</span>
+<span class="kw">fn</span> <span class="ident">alloc</span>() {
+    <span class="ident">asm</span>::<span class="ident">bkpt</span>();
+    <span class="kw">let</span> <span class="ident">x</span> <span class="op">=</span> <span class="ident">A</span>::<span class="ident">alloc</span>();
+    <span class="ident">asm</span>::<span class="ident">bkpt</span>();
+    <span class="ident">mem</span>::<span class="ident">forget</span>(<span class="ident">x</span>);
+}</pre></div>
+
+<div class='information'><div class='tooltip ignore'>ⓘ<span class='tooltiptext'>This example is not tested</span></div></div><div class="example-wrap"><pre class="rust rust-example-rendered ignore">
+<span class="attribute">#[<span class="ident">inline</span>(<span class="ident">never</span>)]</span>
+<span class="kw">fn</span> <span class="ident">free</span>(<span class="ident">x</span>: <span class="ident">Box</span><span class="op">&lt;</span><span class="ident">A</span>, <span class="ident">Uninit</span><span class="op">&gt;</span>) {
+    <span class="ident">asm</span>::<span class="ident">bkpt</span>();
+    <span class="ident">drop</span>(<span class="ident">x</span>);
+    <span class="ident">asm</span>::<span class="ident">bkpt</span>();
+}</pre></div>
+<h1 id="portability" class="section-header"><a href="#portability">Portability</a></h1>
+<p>This pool internally uses a Treiber stack which is known to be susceptible to the ABA problem.
+The only counter measure against the ABA problem that this library currently takes is relying on
+LL/SC (Link-local / Store-conditional) instructions being used to implement CAS loops on the
+target architecture (see section on <a href="#soundness">'Soundness'</a> for more information). For this
+reason, <code>Pool</code> only implements <code>Sync</code> when compiling for ARM Cortex-M.</p>
+<p>Also note that ARMv6-M lacks the primitives for CAS loops so this library will <em>not</em> compile for
+<code>thumbv6m-none-eabi</code>.</p>
+<h1 id="msrv" class="section-header"><a href="#msrv">MSRV</a></h1>
+<p>This crate compiles on stable Rust 1.31.0 or newer.</p>
+<h1 id="cargo-features" class="section-header"><a href="#cargo-features">Cargo features</a></h1><h2 id="arch" class="section-header"><a href="#arch"><code>arch</code></a></h2>
+<p>Replaces the internal implementation, which uses <code>AtomicPtr</code>, with an ARM architecture specific
+implementation that use LL/SC primitives. This optimized implementation significantly reduces
+the overhead of <code>alloc</code> and <code>free</code>, and also shrinks the &quot;critical section&quot; of <code>free</code> (<code>push</code>)
+from 3 to 2 instructions. For reference, the critical section of <code>alloc</code> (<code>pop</code>) is 3
+instructions for both implementations.</p>
+<h2 id="maybe-uninit" class="section-header"><a href="#maybe-uninit"><code>maybe-uninit</code></a></h2>
+<p>Enabling this features adds a <code>grow_exact</code> method to <code>Pool</code> and <code>singleton::Pool</code>. Like <code>grow</code>,
+this method can be used increase the capacity of a pool; however, the given buffer will be fully
+utilized.</p>
+<p>The argument of <code>grow_exact</code> is a static reference to <code>MaybeUninit</code>. As the <code>MaybeUninit</code> is
+still unstable this feature requires using a nightly compiler.</p>
+<h2 id="union" class="section-header"><a href="#union"><code>union</code></a></h2>
+<p>Enabling this feature reduces the footprint of <code>Node</code>, making the pool more space efficient
+(effectively zero cost). This feature depends on the unstable <code>untagged_unions</code> feature and thus
+requires a nightly compiler.</p>
+<h1 id="soundness" class="section-header"><a href="#soundness">Soundness</a></h1>
+<p>This pool uses a Treiber stack to keep a list of free memory blocks (nodes). Each of these
+nodes has a pointer to the next node. To claim a memory block we simply pop a node from the
+top of the stack and use it as a memory block. The pop operation consists of swapping the
+current head (top) node with the node below it. The Rust code for the <code>pop</code> operation is shown
+below:</p>
+
+<div class='information'><div class='tooltip ignore'>ⓘ<span class='tooltiptext'>This example is not tested</span></div></div><div class="example-wrap"><pre class="rust rust-example-rendered ignore">
+<span class="kw">fn</span> <span class="ident">pop</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">NonNull</span><span class="op">&lt;</span><span class="ident">Node</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;&gt;</span><span class="op">&gt;</span> {
+    <span class="kw">let</span> <span class="ident">fetch_order</span> <span class="op">=</span> ..;
+    <span class="kw">let</span> <span class="ident">set_order</span> <span class="op">=</span> ..;
+
+    <span class="comment">// `self.head` has type `AtomicPtr&lt;Node&lt;T&gt;&gt;`</span>
+    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">head</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">head</span>.<span class="ident">load</span>(<span class="ident">fetch_order</span>);
+    <span class="kw">loop</span> {
+        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">nn_head</span>) <span class="op">=</span> <span class="ident">NonNull</span>::<span class="ident">new</span>(<span class="ident">head</span>) {
+            <span class="kw">let</span> <span class="ident">next</span> <span class="op">=</span> <span class="kw">unsafe</span> { (<span class="kw-2">*</span><span class="ident">head</span>).<span class="ident">next</span> };
+
+            <span class="comment">// &lt;~ preempted</span>
+
+            <span class="kw">match</span> <span class="self">self</span>
+                .<span class="ident">head</span>
+                .<span class="ident">compare_exchange_weak</span>(<span class="ident">head</span>, <span class="ident">next</span>, <span class="ident">set_order</span>, <span class="ident">fetch_order</span>)
+            {
+                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) <span class="op">=&gt;</span> <span class="kw">break</span> <span class="prelude-val">Some</span>(<span class="ident">nn_head</span>),
+                <span class="comment">// head was changed by some interrupt handler / thread</span>
+                <span class="prelude-val">Err</span>(<span class="ident">new_head</span>) <span class="op">=&gt;</span> <span class="ident">head</span> <span class="op">=</span> <span class="ident">new_head</span>,
+            }
+        } <span class="kw">else</span> {
+            <span class="comment">// stack is observed as empty</span>
+            <span class="kw">break</span> <span class="prelude-val">None</span>;
+        }
+    }
+}</pre></div>
+<p>In general, the <code>pop</code> operation is susceptible to the ABA problem. If this operation gets
+preempted by some interrupt handler somewhere between the <code>head.load</code> and the
+<code>compare_and_exchange_weak</code>, and that handler modifies the stack in such a way that the head
+(top) of the stack remains unchanged then resuming the <code>pop</code> operation will corrupt the stack.</p>
+<p>An example: imagine we are doing on <code>pop</code> on stack that contains these nodes: <code>A -&gt; B -&gt; C</code>,
+<code>A</code> is the head (top), <code>B</code> is next to <code>A</code> and <code>C</code> is next to <code>B</code>. The <code>pop</code> operation will do a
+<code>CAS(&amp;self.head, A, B)</code> operation to atomically change the head to <code>B</code> iff it currently is <code>A</code>.
+Now, let's say a handler preempts the <code>pop</code> operation before the <code>CAS</code> operation starts and it
+<code>pop</code>s the stack twice and then <code>push</code>es back the <code>A</code> node; now the state of the stack is <code>A -&gt; C</code>. When the original <code>pop</code> operation is resumed it will succeed in doing the <code>CAS</code> operation
+setting <code>B</code> as the head of the stack. However, <code>B</code> was used by the handler as a memory block and
+no longer is a valid free node. As a result the stack, and thus the allocator, is in a invalid
+state.</p>
+<p>However, not all is lost because Cortex-M devices use LL/SC (Link-local / Store-conditional)
+operations to implement CAS loops. Let's look at the actual disassembly of <code>pop</code>.</p>
+<pre><code class="language-text">08000130 &lt;&lt;lifo::Pool&lt;T&gt;&gt;::pop&gt;:
+ 8000130:       6802            ldr     r2, [r0, #0]
+ 8000132:       e00c            b.n     800014e &lt;&lt;lifo::Pool&lt;T&gt;&gt;::pop+0x1e&gt;
+ 8000134:       4611            mov     r1, r2
+ 8000136:       f8d2 c000       ldr.w   ip, [r2]
+ 800013a:       e850 2f00       ldrex   r2, [r0]
+ 800013e:       428a            cmp     r2, r1
+ 8000140:       d103            bne.n   800014a &lt;&lt;lifo::Pool&lt;T&gt;&gt;::pop+0x1a&gt;
+ 8000142:       e840 c300       strex   r3, ip, [r0]
+ 8000146:       b913            cbnz    r3, 800014e &lt;&lt;lifo::Pool&lt;T&gt;&gt;::pop+0x1e&gt;
+ 8000148:       e004            b.n     8000154 &lt;&lt;lifo::Pool&lt;T&gt;&gt;::pop+0x24&gt;
+ 800014a:       f3bf 8f2f       clrex
+ 800014e:       2a00            cmp     r2, #0
+ 8000150:       d1f0            bne.n   8000134 &lt;&lt;lifo::Pool&lt;T&gt;&gt;::pop+0x4&gt;
+ 8000152:       2100            movs    r1, #0
+ 8000154:       4608            mov     r0, r1
+ 8000156:       4770            bx      lr
+</code></pre>
+<p>LDREX (&quot;load exclusive&quot;) is the LL instruction, and STREX (&quot;store exclusive&quot;) is the SC
+instruction (see <a href="#references">1</a>). On the Cortex-M, STREX will always fail if the processor
+takes an exception between it and its corresponding LDREX operation (see <a href="#references">2</a>). If
+STREX fails then the CAS loop is retried (see instruction @ <code>0x8000146</code>). On single core
+systems, preemption is required to run into the ABA problem and on Cortex-M devices preemption
+always involves taking an exception. Thus the underlying LL/SC operations prevent the ABA
+problem on Cortex-M.</p>
+<h1 id="references" class="section-header"><a href="#references">References</a></h1>
+<ol>
+<li><a href="http://infocenter.arm.com/help/topic/com.arm.doc.dui0552a/DUI0552A_cortex_m3_dgug.pdf">Cortex-M3 Devices Generic User Guide (DUI 0552A)</a>, Section 2.2.7 &quot;Synchronization
+primitives&quot;</li>
+</ol>
+<ol start="2">
+<li><a href="https://static.docs.arm.com/ddi0403/eb/DDI0403E_B_armv7m_arm.pdf">ARMv7-M Architecture Reference Manual (DDI 0403E.b)</a>, Section A3.4 &quot;Synchronization and
+semaphores&quot;</li>
+</ol>
+</div><h2 id='reexports' class='section-header'><a href="#reexports">Re-exports</a></h2>
+<table><tr><td><code>pub use crate::singleton::<a class="trait" href="../lifo/singleton/trait.Pool.html" title="trait lifo::singleton::Pool">Pool</a> as pool;</code></td></tr></table><h2 id='modules' class='section-header'><a href="#modules">Modules</a></h2>
+<table><tr class='module-item'><td><a class="mod" href="singleton/index.html" title='lifo::singleton mod'>singleton</a></td><td class='docblock-short'><p><code>Pool</code> as a global singleton</p>
+</td></tr></table><h2 id='macros' class='section-header'><a href="#macros">Macros</a></h2>
+<table><tr class='module-item'><td><a class="macro" href="macro.pool.html" title='lifo::pool macro'>pool</a></td><td class='docblock-short'><p>Instantiates a pool as a global singleton</p>
+</td></tr></table><h2 id='structs' class='section-header'><a href="#structs">Structs</a></h2>
+<table><tr class='module-item'><td><a class="struct" href="struct.Box.html" title='lifo::Box struct'>Box</a></td><td class='docblock-short'><p>A memory block</p>
+</td></tr><tr class='module-item'><td><a class="struct" href="struct.Pool.html" title='lifo::Pool struct'>Pool</a></td><td class='docblock-short'><p>A lock-free memory pool</p>
+</td></tr></table><h2 id='enums' class='section-header'><a href="#enums">Enums</a></h2>
+<table><tr class='module-item'><td><a class="enum" href="enum.Init.html" title='lifo::Init enum'>Init</a></td><td class='docblock-short'><p>Initialized type state</p>
+</td></tr><tr class='module-item'><td><a class="enum" href="enum.Uninit.html" title='lifo::Uninit enum'>Uninit</a></td><td class='docblock-short'><p>Uninitialized type state</p>
+</td></tr></table><h2 id='unions' class='section-header'><a href="#unions">Unions</a></h2>
+<table><tr class='module-item'><td><a class="union" href="union.Node.html" title='lifo::Node union'>Node</a></td><td class='docblock-short'><p>Unfortunate implementation detail that you need to interact with if you want to use <code>grow_exact</code></p>
+</td></tr></table></section><section id="search" class="content hidden"></section><section class="footer"></section><aside id="help" class="hidden"><div><h1 class="hidden">Help</h1><div class="shortcuts"><h2>Keyboard Shortcuts</h2><dl><dt><kbd>?</kbd></dt><dd>Show this help dialog</dd><dt><kbd>S</kbd></dt><dd>Focus the search field</dd><dt><kbd>↑</kbd></dt><dd>Move up in search results</dd><dt><kbd>↓</kbd></dt><dd>Move down in search results</dd><dt><kbd>↹</kbd></dt><dd>Switch tab</dd><dt><kbd>&#9166;</kbd></dt><dd>Go to active search result</dd><dt><kbd>+</kbd></dt><dd>Expand all sections</dd><dt><kbd>-</kbd></dt><dd>Collapse all sections</dd></dl></div><div class="infos"><h2>Search Tricks</h2><p>Prefix searches with a type followed by a colon (e.g., <code>fn:</code>) to restrict the search to a given type.</p><p>Accepted types are: <code>fn</code>, <code>mod</code>, <code>struct</code>, <code>enum</code>, <code>trait</code>, <code>type</code>, <code>macro</code>, and <code>const</code>.</p><p>Search functions by type signature (e.g., <code>vec -> usize</code> or <code>* -> vec</code>)</p><p>Search multiple things at once by splitting your query with comma (e.g., <code>str,u8</code> or <code>String,struct:Vec,test</code>)</p></div></div></aside><script>window.rootPath = "../";window.currentCrate = "lifo";</script><script src="../aliases.js"></script><script src="../main.js"></script><script defer src="../search-index.js"></script></body></html>
