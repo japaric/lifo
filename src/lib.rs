@@ -395,7 +395,7 @@ impl<T> Pool<T> {
     where
         A: AsMutSlice<Element = Node<T>>,
     {
-        for p in unsafe { memory.get_mut().as_mut_slice() } {
+        for p in unsafe { (*memory.as_mut_ptr()).as_mut_slice() } {
             self.push(NonNull::from(p))
         }
     }

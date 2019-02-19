@@ -6,6 +6,18 @@ use core::{
 use crate::Pool;
 
 #[test]
+fn grow() {
+    static POOL: Pool<[u8; 128]> = Pool::new();
+    static mut MEMORY: [u8; 1024] = [0; 1024];
+
+    unsafe { POOL.grow(&mut MEMORY) }
+
+    for _ in 0..7 {
+        assert!(POOL.alloc().is_some());
+    }
+}
+
+#[test]
 fn sanity() {
     static POOL: Pool<u8> = Pool::new();
     #[cfg(not(feature = "union"))]
