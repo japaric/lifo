@@ -1,8 +1,16 @@
+**STATUS:** *DEPRECATED*. The code in this repository crate has been integrated
+into [heapless] v0.4.3. This repository is now archived and will receive no
+further updates.
+
+[heapless]: https://crates.io/crates/heapless
+
+- [@japaric](https://github.com/japaric/), 2019-05-22
+
+---
+
 # `lifo`
 
 > A heap-less, interrupt-safe, lock-free memory pool for Cortex-M devices
-
-## [Documentation](https://japaric.github.io/lifo/lifo/index.html)
 
 ## License
 
